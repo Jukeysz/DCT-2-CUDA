@@ -1,0 +1,13 @@
+.vscode/
+src/build/
+build/
+build/*.csv
+reduced_data/
+*.csv
+**/*.csv
+*.o
+*.out
+*.exe
+*.obj
+*.csv
+*.ppmdata4d.csv
