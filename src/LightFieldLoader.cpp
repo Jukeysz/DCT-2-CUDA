@@ -228,37 +228,3 @@ int LightFieldLoader::getHeight() const { return H; }
 int LightFieldLoader::getWidth() const { return W; }
 int LightFieldLoader::getAngularRows() const { return U; }
 int LightFieldLoader::getAngularCols() const { return V; }
-
-/*
-    Ainda estou tentando bastante fazer a minha implementação convergir com a do jpeg pleno.
-    Eu consegui fazer uma função no c++ que calcula e replica exatamente os mesmos coeficientes das ondas base da DCT.
-    Uma vez que eu consegui fazer isso, os resultados sao discrepantes. Uma coisa que eu percebi é que os meus coeficientes
-    divergem por uma constante que é muito perto de raiz de 2.
-    A primeira coisa suspeita que me vem a mente é que, nesse código da imagem, na linha 106, percebe que o forward pass da dct ele
-    faz um for loop com o auto j pra setar tudo pra 1, pra só assim continuar com o segundo loop.
-    Pode ser coincidencia mas ele usa o j como variavel no primeiro for (ele comentou i=0). Talvez ele esteja organizando essa 
-    estrutura de dado no formato column major, em que cada coluna seriam vários float que representam uma onda.
-    Na minha implementação, eu fiz o contrário, cada linha é uma onda. Então eu tentei fazer a transposta dessa matriz
-    e deu resultados muito absurdos, talvez esse não seja o motivo. Uma coisa que eu imagino que possa ser é que eu devo
-    estar passando algum parâmetro de tamanho de dimensão errado no código, parece que meio que o código não está coletando
-    todas as amostras para calcular a dct 1d pra cada valor fixo de VST no layout UVST.
-
-    Output do meu código (da primeira passada):
-    i,j,k,l,value
-    0,0,0,0,1214
-    0,0,0,1,124
-    0,0,0,2,-28
-    0,0,0,3,-863
-    0,0,0,4,-1875
-    0,0,0,5,-2631
-
-    Esperado:
-    u,v,s,t,value
-    0,0,0,0,1689.82
-    0,0,0,1,172.601
-    0,0,0,2,-38.9744
-    0,0,0,3,-1201.25
-    0,0,0,4,-2609.89
-    0,0,0,5,-3662.2
-
-*/
