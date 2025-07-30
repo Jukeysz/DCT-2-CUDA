@@ -171,27 +171,14 @@ std::vector<float> LightFieldLoader::calculateBasisWaves(int dimSize) const {
 
 void LightFieldLoader::calculateDctDim() {
     std::string synth_folder = "../../synth_data/firstblock.csv";
-    getFlattenedSyntheticLF(synth_folder);
-
-    std::vector<float> basis_data(U * U, 0.0f);
-    basis_data = calculateBasisWaves(U);
-
-    std::ofstream output("coefficientsForU.csv");
-    output << "i,j,value\n";
-
-    for (int i = 0; i < U; ++i) {
-        for (int j = 0; j < U; ++j) {
-            output << i << "," << j << "," << basis_data[i * U + j] << "\n";
-        }
-    }
+    getFlattenedSyntheticLF(synth_folder);   
 
     for (int i = 0; i < 2; ++i) {
-        apply_dct1d_gpu(basis_data.data(), flattenedLf.data(), U, V, H, W, i);
+        apply_dct1d_gpu(flattenedLf.data(), U, V, H, W, i);
     }
 
-    basis_data = calculateBasisWaves(H);
     for (int i = 2; i < 4; ++i) {
-        apply_dct1d_gpu(basis_data.data(), flattenedLf.data(), U, V, H, W, i);
+        apply_dct1d_gpu(flattenedLf.data(), U, V, H, W, i);
     }
 }
 

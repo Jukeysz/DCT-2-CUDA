@@ -13,7 +13,23 @@ and w,z,y specify the location of the 1D slice (sub-vector) I'm transforming
 
 // BUFFER ORDER: WZYX
 
-__global__ void dct4d_x_kernel(const float* d_input, float* d_output, float* basisWaves,
+
+/*
+    TODO:
+    Write down the dct basis coefficients by using local memory
+*/
+
+__constant__ float BASIS16[16 * 16] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1.4074,1.35332,1.24723,1.0932,0.897168,0.666656,0.410524,0.138617,-0.138617,-0.410525,-0.666655,-0.897168,-1.0932,-1.24722,-1.35332,-1.4074,1.38704,1.17588,0.785695,0.275899,-0.275899,-0.785695,-1.17588,-1.38704,-1.38704,-1.17588,-0.785695,-0.275899,0.275899,0.785695,1.17588,1.38704,1.35332,0.897168,0.138617,-0.666655,-1.24722,-1.4074,-1.0932,-0.410524,0.410524,1.0932,1.4074,1.24722,
+0.666656,-0.138617,-0.897168,-1.35332,1.30656,0.541196,-0.541196,-1.30656,-1.30656,-0.541196,0.541196,1.30656,1.30656,0.541196,-0.541196,-1.30656,-1.30656,-0.541197,0.541196,1.30656,1.24723,0.138617,-1.0932,-1.35332,-0.410524,0.897168,1.4074,0.666656,-0.666655,-1.4074,-0.897168,0.410524,1.35332,1.0932,-0.138618,-1.24723,1.17588,-0.275899,-1.38704,-0.785695,0.785695,1.38704,0.2759,-1.17588,-1.17588,0.2759,1.38704,0.785695,-0.785695,-1.38704,-0.275898,1.17588,1.0932,-0.666655,-1.35332,0.138617,1.4074,0.410525,-1.24722,-0.897168,
+0.897167,1.24723,-0.410524,-1.4074,-0.138618,1.35332,0.666657,-1.0932,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-0.999999,-1,1,0.897168,-1.24722,-0.410524,1.4074,-0.138617,-1.35332,0.666656,1.0932,-1.0932,-0.666656,1.35332,0.138617,-1.4074,0.410526,1.24722,-0.897167,0.785695,-1.38704,0.275899,1.17588,-1.17588,-0.275899,1.38704,-0.785695,-0.785695,1.38704,-0.275898,-1.17588,1.17588,0.275898,-1.38704,0.785695,0.666656,-1.4074,0.897168,0.410525,
+-1.35332,1.0932,0.138618,-1.24722,1.24723,-0.138616,-1.0932,1.35332,-0.410525,-0.897167,1.4074,-0.666655,0.541196,-1.30656,1.30656,-0.541196,-0.541197,1.30656,-1.30656,0.541197,0.541197,-1.30656,1.30656,-0.541197,-0.541197,1.30656,-1.30656,0.541197,0.410524,-1.0932,1.4074,-1.24722,0.666656,0.138618,-0.897168,1.35332,-1.35332,0.897168,-0.138617,-0.666656,1.24722,-1.4074,1.0932,-0.410527,0.275899,-0.785695,1.17588,-1.38704,1.38704,-1.17588,0.785694,-0.275898,-0.2759,0.785695,-1.17588,1.38704,-1.38704,1.17587,-0.785693,0.275898,
+0.138617,-0.410524,0.666656,-0.897168,1.0932,-1.24722,1.35332,-1.4074,1.4074,-1.35332,1.24722,-1.0932,0.897169,-0.666654,0.410523,-0.138617,};
+
+__constant__ float BASIS13[13 * 13] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1.4039,1.32231,1.16387,0.937797,0.657218,0.338444,-6.18172e-08,-0.338443,-0.657218,-0.937797,-1.16387,-1.32231,-1.4039,1.37312,1.05855,0.501487,-0.170465,-0.803365,-1.25222,-1.41421,-1.25222,-0.803365,-0.170465,0.501487,1.05855,1.37312,1.32231,0.657218,-0.338443,-1.16387,-1.4039,-0.937797,1.68643e-08,0.937797,1.4039,1.16387,0.338444,-0.657217,-1.32231,1.25222,0.170465,-1.05855,-1.37312,-0.501487,0.803365,1.41421,0.803365,
+-0.501486,-1.37312,-1.05855,0.170464,1.25222,1.16387,-0.338443,-1.4039,-0.657218,0.937797,1.32231,1.96676e-07,-1.32231,-0.937797,0.657218,1.4039,0.338444,-1.16388,1.05855,-0.803365,-1.25222,0.501487,1.37312,-0.170464,-1.41421,-0.170465,1.37312,0.501487,-1.25222,-0.803366,1.05855,0.937797,-1.16387,-0.657218,1.32231,0.338444,-1.4039,-4.10216e-07,1.4039,-0.338444,-1.32231,0.657217,1.16387,-0.937796,0.803365,-1.37312,0.170465,1.25222,-1.05855,-0.501488,1.41421,-0.501487,-1.05855,1.25222,0.170464,-1.37312,0.803365,0.657218,-1.4039,0.937797,
+0.338444,-1.32231,1.16387,-5.0593e-08,-1.16387,1.32231,-0.338445,-0.937797,1.4039,-0.657217,0.501487,-1.25222,1.37312,-0.803364,-0.170465,1.05855,-1.41421,1.05855,-0.170466,-0.803365,1.37312,-1.25222,0.501488,0.338444,-0.937797,1.32231,-1.4039,1.16387,-0.657218,-8.37297e-07,0.657217,-1.16388,1.4039,-1.32231,0.937796,-0.338441,0.170465,-0.501487,0.803365,-1.05855,1.25222,-1.37312,1.41421,-1.37312,1.25222,-1.05855,0.803364,-0.501485,0.170464,};
+
+__global__ void dct4d_x_kernel(const float* d_input, float* d_output,
                              int W, int Z, int Y, int X)
 {
     // calculates one output value
@@ -47,7 +63,7 @@ __global__ void dct4d_x_kernel(const float* d_input, float* d_output, float* bas
             + n * X_stride; // n walks here
 
         // accumulate the sum
-        sum += d_input[input_linear_idx] * basisWaves[X * k + n];
+        sum += d_input[input_linear_idx] * BASIS13[X * k + n];
     }
 
     // calculate the linear index for the output element output[w][z][y][k]
@@ -60,7 +76,7 @@ __global__ void dct4d_x_kernel(const float* d_input, float* d_output, float* bas
     d_output[output_linear_idx] = sum;
 }
 
-__global__ void dct4d_y_kernel(float *d_input, float *d_output, float *basisWaves,
+__global__ void dct4d_y_kernel(float *d_input, float *d_output,
                                int W, int Z, int Y, int X) 
 {
     int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -98,7 +114,7 @@ __global__ void dct4d_y_kernel(float *d_input, float *d_output, float *basisWave
             + x * X_stride; // n walks here
 
         // accumulate the sum
-        sum += d_input[input_linear_idx] * basisWaves[Y * k + n];
+        sum += d_input[input_linear_idx] * BASIS13[Y * k + n];
     }
 
 
@@ -115,7 +131,7 @@ __global__ void dct4d_y_kernel(float *d_input, float *d_output, float *basisWave
     d_output[output_linear_idx] = sum;
 }
 
-__global__ void dct4d_z_kernel(float *d_input, float *d_output, float *basisWaves,
+__global__ void dct4d_z_kernel(float *d_input, float *d_output,
     int W, int Z, int Y, int X) 
 {
     int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -152,7 +168,7 @@ __global__ void dct4d_z_kernel(float *d_input, float *d_output, float *basisWave
         + x * X_stride;
 
         // accumulate the sum
-        sum += d_input[input_linear_idx] * basisWaves[Z * k + n];
+        sum += d_input[input_linear_idx] * BASIS16[Z * k + n];
     }
 
     // calculate the linear index for the output element output[w][z][y][k]
@@ -170,7 +186,7 @@ __global__ void dct4d_z_kernel(float *d_input, float *d_output, float *basisWave
     d_output[output_linear_idx] = sum * normalizer;
 }
 
-__global__ void dct4d_w_kernel(float *d_input, float *d_output, float *basisWaves,
+__global__ void dct4d_w_kernel(float *d_input, float *d_output,
     int W, int Z, int Y, int X) 
 {
     int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -207,7 +223,11 @@ __global__ void dct4d_w_kernel(float *d_input, float *d_output, float *basisWave
         + x * X_stride; // n walks here
 
         // accumulate the sum
-        sum += d_input[input_linear_idx] * basisWaves[W * k + n];
+
+        // K determines which wave to take from the 2D basis waves matrix
+        // each of these waves correspond to one index of the vector result of coefs for a fixated ZYX.
+        // the d_input would be broadcasted if the kernel computed whole coef vectors
+        sum += d_input[input_linear_idx] * BASIS16[W * k + n];
     }
 
     // calculate the linear index for the output element output[w][z][y][k]
@@ -225,33 +245,16 @@ __global__ void dct4d_w_kernel(float *d_input, float *d_output, float *basisWave
     d_output[output_linear_idx] = sum * normalizer;
 }
 
-void apply_dct1d_gpu(float* dctMatrix, float* data,
+void apply_dct1d_gpu(float* data,
                      int U, int V, int S, int T, int selectedDim) {
-    float *d_output, *d_data, *d_basis;
+    float *d_output, *d_data;
 
     size_t size_out = (size_t)U*V*S*T * sizeof(float);
     size_t size_data = (size_t)U*V*S*T * sizeof(float);
-    size_t size_basis;
-
-    switch (selectedDim) {
-        //case 0: size_basis = (size_t)T * T * sizeof(float); break;
-        //case 1: size_basis = (size_t)S * S * sizeof(float); break;
-        //case 2: size_basis = (size_t)V * V * sizeof(float); break;
-        //case 3: size_basis = (size_t)U * U * sizeof(float); break;
-        case 0: size_basis = (size_t)U * U * sizeof(float); break;       
-        case 1: size_basis = (size_t)V * V * sizeof(float); break;
-        case 2: size_basis = (size_t)S * S * sizeof(float); break;
-        case 3: size_basis = (size_t)T * T * sizeof(float); break;
-        default:
-            printf("Error: Invalid selectedDim in apply_dct1d_gpu\n");
-            return;
-    }
 
     cudaMalloc(&d_output, size_out);
     cudaMalloc(&d_data, size_data);
-    cudaMalloc((void**)&d_basis, size_basis);
 
-    cudaMemcpy(d_basis, dctMatrix, size_basis, cudaMemcpyHostToDevice);
     cudaMemcpy(d_data, data, size_data, cudaMemcpyHostToDevice);
 
     int total_threads = U * V * S * T;
@@ -262,22 +265,22 @@ void apply_dct1d_gpu(float* dctMatrix, float* data,
 
     switch (selectedDim) {
         case 3: {
-            dct4d_x_kernel<<<num_blocks, block_dims, 0>>>(d_data, d_output, d_basis, U, V, S, T);
+            dct4d_x_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
 
         case 2: {
-            dct4d_y_kernel<<<num_blocks, block_dims, 0>>>(d_data, d_output, d_basis, U, V, S, T);
+            dct4d_y_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
 
         case 1: {
-            dct4d_z_kernel<<<num_blocks, block_dims, 0>>>(d_data, d_output, d_basis, U, V, S, T);
+            dct4d_z_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
 
         case 0: {
-            dct4d_w_kernel<<<num_blocks, block_dims, 0>>>(d_data, d_output, d_basis, U, V, S, T);
+            dct4d_w_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
     }
@@ -297,5 +300,4 @@ void apply_dct1d_gpu(float* dctMatrix, float* data,
 
     cudaFree(d_output);
     cudaFree(d_data);
-    cudaFree(d_basis);
 }
