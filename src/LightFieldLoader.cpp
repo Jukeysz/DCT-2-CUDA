@@ -4,6 +4,7 @@
 #include "apply_dct1d.hpp"
 #include <fstream>
 #include <vector>
+#include <ranges>
 
 #define SYNTH_SAMPLE 43264
 
@@ -96,8 +97,9 @@ void LightFieldLoader::getFlattenedSyntheticLF(std::string& imageDir) {
             std::getline(ss, token, ',');
         }
         std::getline(ss, token, ',');
-        float value = std::stof(token);
+        double value = std::stod(token);
         flattenedLf[offset++] = value;
+
     }
 
     infile.close();
@@ -150,19 +152,18 @@ void LightFieldLoader::getFlattenedLightField(int channel) {
     }
 }
 
-#define DCT_PI 3.141592653589793
-
-std::vector<float> LightFieldLoader::calculateBasisWaves(int dimSize) const {
-    std::vector<float> flattened_vector(dimSize * dimSize, 0);
+std::vector<double> LightFieldLoader::calculateBasisWaves(int dimSize) const {
+    std::vector<double> flattened_vector(dimSize * dimSize, 0);
+    const double DCT_PI = 3.141592653589793;
     if (dimSize == 0) return flattened_vector;
 
-    for (int i = 0; i < dimSize; ++i) {
-        flattened_vector[i] = 1;
+    for (auto i = 0; i < dimSize; ++i) {
+        flattened_vector[i] = 1.0;
     }
-    for (int i = 1; i < dimSize; ++i) {
-        for (int j = 0; j < dimSize; ++j) {
-            float angle = DCT_PI * (i * (2.0 * j + 1.0)) / (2.0 * dimSize);
-            flattened_vector[i * dimSize + j] = std::sqrt(2.0) * std::cosf(angle);
+    for (auto i = 1; i < dimSize; ++i) {
+        for (auto j = 0; j < dimSize; ++j) {
+            double angle = DCT_PI * (i * (2.0 * j + 1.0)) / (2.0 * dimSize);
+            flattened_vector[i * dimSize + j] = std::sqrt(2.0) * std::cos(angle);
         }
     }
 
@@ -170,14 +171,11 @@ std::vector<float> LightFieldLoader::calculateBasisWaves(int dimSize) const {
 }
 
 void LightFieldLoader::calculateDctDim() {
-    std::string synth_folder = "../../synth_data/firstblock.csv";
-    getFlattenedSyntheticLF(synth_folder);   
+    std::string synth_folder = "../../Danger_test/initial_Danger_test.csv";
+    getFlattenedSyntheticLF(synth_folder);
 
-    for (int i = 0; i < 2; ++i) {
-        apply_dct1d_gpu(flattenedLf.data(), U, V, H, W, i);
-    }
 
-    for (int i = 2; i < 4; ++i) {
+    for (int i = 0; i < 4; ++i) {
         apply_dct1d_gpu(flattenedLf.data(), U, V, H, W, i);
     }
 }
@@ -185,7 +183,8 @@ void LightFieldLoader::calculateDctDim() {
 void LightFieldLoader::exportToCsv() {
     std::cout << "About to export to csv!\n";
 
-    std::ofstream outfile("first_output.csv");
+    std::ofstream outfile("four_passes.csv");
+    outfile << std::setprecision(std::numeric_limits<double>::max_digits10);
 
     if (!outfile.is_open()) {
         std::cerr << "It was not possible to open the file into ofstream\n";
@@ -209,6 +208,91 @@ void LightFieldLoader::exportToCsv() {
     }
 
     outfile.close();
+}
+
+void LightFieldLoader::calculateError() {
+    std::ifstream file("../../Danger_test/final_dct.csv");
+    if (!file.is_open()) {
+        std::cerr << "Could not open the final_dct.csv file" << std::endl;
+        return;
+    }
+    std::vector<double> cpu_results;
+    std::string line;
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string cell;
+        int col = 0;
+        double value = 0.0;
+
+        while (std::getline(ss, cell, ',')) {
+            if (col == 4) {
+                try {
+                    value = std::stod(cell);
+                    cpu_results.push_back(value);
+                } catch (const std::invalid_argument&) {
+                    // skip the row
+                }
+                break;
+            }
+            ++col;
+        }
+    }
+
+    std::ifstream file1("./four_passes.csv");
+    if (!file1.is_open()) {
+        std::cerr << "Could not open the four_passes.csv file" << std::endl;
+        return;
+    }
+    std::vector<double> gpu_results;
+    std::string line1;
+
+    while (std::getline(file1, line1)) {
+        std::stringstream ss(line1);
+        std::string cell;
+        int col = 0;
+        double value = 0.0;
+
+        while (std::getline(ss, cell, ',')) {
+            if (col == 4) {
+                try {
+                    value = std::stod(cell);
+                    gpu_results.push_back(value);
+                } catch (const std::invalid_argument&) {
+                    // skip
+                }
+                break;
+            }
+            ++col;
+        }
+    }
+
+    // Once I have both coefs loaded in gpu_results and cpu_results
+    int size = this->U * this->V * this->H * this->W;
+    std::vector<double> absolute_error;
+    std::vector<double> relative_error;
+    for (int i = 0; i < size; ++i) {
+        absolute_error.push_back(std::abs(gpu_results[i] - cpu_results[i]));
+        relative_error.push_back((std::abs(cpu_results[i] - gpu_results[i]) / std::abs(cpu_results[i])) * 100.0);
+    }
+
+    std::ofstream out0("relative_error");
+    std::ofstream out1("absolute_error");
+
+    out0 << std::setprecision(std::numeric_limits<double>::max_digits10);
+    out1 << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+    for (int i = 0; i < size; ++i) {
+        out0 << relative_error[i] << "\n";
+        out1 << absolute_error[i] << "\n";
+    }
+
+    // find the max value from both lists
+    auto [min_it, max_it] = std::ranges::minmax_element(absolute_error);
+    std::cout << "Max absolute error: " << std::setprecision(std::numeric_limits<double>::max_digits10) << *max_it << "\n";
+
+    auto [min_it2, max_it2] = std::ranges::minmax_element(relative_error);
+    std::cout << "Max relative error: " << std::setprecision(std::numeric_limits<double>::max_digits10) << *max_it2 << "\n";
 }
 
 int LightFieldLoader::getHeight() const { return H; }

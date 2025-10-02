@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 
-void apply_dct1d_gpu(float *data,
+void apply_dct1d_gpu(double *data,
                     int U, int V, int S, int T, int selectedDim);
 
 

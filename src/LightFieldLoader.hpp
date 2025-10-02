@@ -7,10 +7,10 @@
 #include <vector>
 #include <string>
 #include <fstream>
-#include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
+#include <opencv4/opencv2/core.hpp>
+#include <opencv4/opencv2/imgcodecs.hpp>
+#include <opencv4/opencv2/imgproc.hpp>
+#include <opencv4/opencv2/highgui.hpp>
 
 class LightFieldLoader {
 public:
@@ -26,11 +26,12 @@ public:
     int getAngularCols() const;
 
     void getFlattenedLightField(int channel);
-    std::vector<float> calculateBasisWaves(int dimSize) const;
+    std::vector<double> calculateBasisWaves(int dimSize) const;
     void calculateDctDim();
     void exportToCsv();
+    void calculateError();
 
-    std::vector<float> flattenedLf;
+    std::vector<double> flattenedLf;
 
 private:
     std::string imageDir;
