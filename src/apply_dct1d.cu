@@ -60,233 +60,295 @@ __constant__ double BASIS16[16 * 16] = {
 0.13861716919909170,-0.41052452752235752,0.66665565847774699,-0.89716758634263616,1.09320186700175848,-1.24722501298667288,1.35331800117435352,-1.40740373752638281,1.40740373752638237,-1.35331800117435264,1.24722501298667177,-1.09320186700175848,0.89716758634263416,-0.66665565847774033,0.41052452752235619,-0.13861716919908601,
 };
 
+#define LF_SIZE 45841250
+
+// Paralelizar sobre as espaciais e iterar sobre as angulares
+
+// __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
+//                              int W, int Z, int Y, int X)
+// {
+//     // calculates one output value
+//     int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+// 
+//     int X_stride = 1;         // stride between elements along X
+//     int Y_stride = X;         // stride between elements along Y
+//     int Z_stride = Y * X;     // stride between elements along Z
+//     int W_stride = Z * Y * X; // stride between elements along W
+// 
+//     int k = global_idx % X;
+//     int y = (global_idx / X) % Y;
+//     int z = (global_idx / (X * Y)) % Z;
+//     int w = global_idx / (X * Y * Z);
+// 
+//     
+//     // ensure this thread is within the bounds of the output data.
+//     if (w >= W || z >= Z || y >= Y || k >= X) {
+//         return;
+//     }
+// 
+//     // this thread calculates output[w][z][y][k]
+//     double sum = 0;
+// 
+//     for (int n = 0; n < X; ++n) {
+//         // calculate the linear index for the input element input[w][z][y][n]
+//         int input_linear_idx = 
+//               w * W_stride 
+//             + z * Z_stride 
+//             + y * Y_stride  // if dim was Y, n would walk here
+//             + n * X_stride; // n walks here
+// 
+//         // accumulate the sum
+//         sum += d_input[input_linear_idx] * BASIS13[X * k + n];
+//     }
+// 
+//     // calculate the linear index for the output element output[w][z][y][k]
+//     int output_linear_idx = 
+//           w * W_stride 
+//         + z * Z_stride 
+//         + y * Y_stride 
+//         + k * X_stride;
+// 
+//     d_output[output_linear_idx] = sum;
+// }
+
 __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
                              int W, int Z, int Y, int X)
 {
-    // calculates one output value
-    int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    double normalizer = 1.3919410907075054;
+    int TILE_DIM = 16;
 
-    int X_stride = 1;         // stride between elements along X
-    int Y_stride = X;         // stride between elements along Y
-    int Z_stride = Y * X;     // stride between elements along Z
-    int W_stride = Z * Y * X; // stride between elements along W
+    int X_stride = 1;         
+    int Y_stride = X;         
+    int Z_stride = Y * X;     
+    int W_stride = Z * Y * X;
 
-    int k = global_idx % X;
-    int y = (global_idx / X) % Y;
-    int z = (global_idx / (X * Y)) % Z;
-    int w = global_idx / (X * Y * Z);
+    // int block_offset_x = blockIdx.x * TILE_DIM;
+    // int block_offset_y = blockIdx.y * TILE_DIM;
+    // if (block_offset_y + TILE_DIM > Y || block_offset_x + TILE_DIM > X) {
+    //     return;
+    // }
+    // int tx = threadIdx.x % TILE_DIM;
+    // int ty = threadIdx.x / TILE_DIM;
+    // int global_x = block_offset_x + tx;
+    // int global_y = block_offset_y + ty;
 
-    
-    // ensure this thread is within the bounds of the output data.
-    if (w >= W || z >= Z || y >= Y || k >= X) {
-        return;
+    int macroblock_x = blockIdx.x * 31;
+    int macroblock_y = blockIdx.y * 31;
+
+    int subblock_x = macroblock_x + 15;
+    int subblock_y = macroblock_y + 15;
+
+    if (subblock_x >= X || subblock_y >= Y) return;
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int global_x = subblock_x + tx;
+    int global_y = subblock_y + ty;
+
+    if (global_x >= X || global_y >= Y) return;
+
+    for (int z = 0; z < Z; ++z) {
+        for (int w = 0; w < W; ++w) {
+            double sum = 0.0;
+
+            for (int x_in_local = 0; x_in_local < TILE_DIM; ++x_in_local) {
+                // int x_in_global = block_offset_x + x_in_local;
+                int x_in_global = subblock_x + x_in_local;
+
+                int input_idx = w*W_stride + z*Z_stride + global_y*Y_stride + x_in_global*X_stride;
+
+                int basis_idx = tx * TILE_DIM + x_in_local;
+
+                sum += d_input[input_idx] * BASIS16[basis_idx];
+            }
+
+            // int x_out_global = block_offset_x + tx;
+            int x_out_global = subblock_x + tx;
+
+            int output_idx = w*W_stride + z*Z_stride + global_y*Y_stride + x_out_global*X_stride;
+
+            d_output[output_idx] = sum * normalizer;
+        }
     }
 
-    // this thread calculates output[w][z][y][k]
-    double sum = 0;
-
-    for (int n = 0; n < X; ++n) {
-        // calculate the linear index for the input element input[w][z][y][n]
-        int input_linear_idx = 
-              w * W_stride 
-            + z * Z_stride 
-            + y * Y_stride  // if dim was Y, n would walk here
-            + n * X_stride; // n walks here
-
-        // accumulate the sum
-        sum += d_input[input_linear_idx] * BASIS13[X * k + n];
-    }
-
-    // calculate the linear index for the output element output[w][z][y][k]
-    int output_linear_idx = 
-          w * W_stride 
-        + z * Z_stride 
-        + y * Y_stride 
-        + k * X_stride;
-
-    d_output[output_linear_idx] = sum;
 }
 
 __global__ void dct4d_y_kernel(const double* d_input, double* d_output,
                                int W, int Z, int Y, int X) 
 {
-    int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    double normalizer = 1.3919410907075054;
+    int TILE_DIM = 16;
 
     int X_stride = 1;
     int Y_stride = X;
     int Z_stride = Y * X;
     int W_stride = Y * X * Z;
 
-    int x = global_idx % X;
-    int k = (global_idx / X) % Y;
-    int z = (global_idx / (X * Y)) % Z;
-    int w = (global_idx / (X * Y * Z));
+    // int block_offset_x = blockIdx.x * TILE_DIM;
+    // int block_offset_y = blockIdx.y * TILE_DIM;
+    // if (block_offset_y + TILE_DIM > Y || block_offset_x + TILE_DIM > X) {
+    //     return;
+    // }
+    // int tx = threadIdx.x % TILE_DIM;
+    // int ty = threadIdx.x / TILE_DIM;
+    // int global_x = block_offset_x + tx;
+    // int global_y = block_offset_y + ty;
 
-    // ensure this thread is within the bounds of the output data.
-    if (w >= W || z >= Z || k >= Y || x >= X) {
-        return;
+    int macroblock_x = blockIdx.x * 31;
+    int macroblock_y = blockIdx.y * 31;
+
+    int subblock_x = macroblock_x + 15;
+    int subblock_y = macroblock_y + 15;
+
+    if (subblock_x >= X || subblock_y >= Y) return;
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int global_x = subblock_x + tx;
+    int global_y = subblock_y + ty;
+
+    if (global_x >= X || global_y >= Y) return;
+
+
+    for (int z = 0; z < Z; ++z) {
+        for (int w = 0; w < W; ++w) {
+            double sum = 0.0;
+            for (int y_in_local = 0; y_in_local < TILE_DIM; ++y_in_local) {
+                // int y_in_global = block_offset_y + y_in_local;
+                int y_in_global = subblock_y + y_in_local;
+
+                int input_idx = w*W_stride + z*Z_stride + y_in_global*Y_stride + global_x*X_stride;
+                int basis_idx = ty * TILE_DIM + y_in_local;
+
+                sum += d_input[input_idx] * BASIS16[basis_idx];
+            }
+
+            // int y_out_global = block_offset_y + ty;
+            int y_out_global = subblock_y + ty;
+            int output_idx = w*W_stride + z*Z_stride + y_out_global*Y_stride + global_x*X_stride;
+
+            d_output[output_idx] = sum * normalizer;
+        }
     }
-
-    // calculate dct sum
-    // this thread calculates output[w][z][y][k]
-    double sum = 0;
-
-    /*
-    ----------------- REMINDER ---------------
-    for a given k, it takes its correct sum from the kth wave,
-    so it doesnt walk through the whole slice, just one coef
-    */
-    for (int n = 0; n < Y; ++n) {
-        // Calculate the linear index for the input element input[w][z][y][n]
-        int input_linear_idx = 
-              w * W_stride 
-            + z * Z_stride 
-            + n * Y_stride  // if dim was Y, n would walk here
-            + x * X_stride; // n walks here
-
-        // accumulate the sum
-        sum += d_input[input_linear_idx] * BASIS13[Y * k + n];
-    }
-
-
-    // calculate the linear index for the output element output[w][z][y][k]
-    // this is the same as the global_idx if the grid/block structure matches perfectly.
-    // it just flattens again
-    int output_linear_idx = 
-          w * W_stride 
-        + z * Z_stride 
-        + k * Y_stride 
-        + x * X_stride;
-
-    // the output element is the position of the DCT basis wave coef at thread's WZY
-    d_output[output_linear_idx] = sum;
 }
 
 __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
     int W, int Z, int Y, int X) 
-{
-    int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    int X_stride = 1;
-    int Y_stride = X;
-    int Z_stride = Y * X;
-    int W_stride = Y * X * Z;
-
-    int x = global_idx % X;
-    int y = (global_idx / X) % Y;
-    int k = (global_idx / (X * Y)) % Z;
-    int w = (global_idx / (X * Y * Z));
-
-    // ensure this thread is within the bounds of the output data.
-    if (w >= W || k >= Z || y >= Y || x >= X) {
-        return;
-    }
-
-    // calculate dct sum
-    // this thread calculates output[w][z][y][k]
-    double sum = 0;
-
-    /*
-    for a given k, it takes its correct sum from the kth wave,
-    so it doesnt walk through the whole slice, just one coef
-    */
-    for (int n = 0; n < Z; ++n) {
-        // Calculate the linear index for the input element input[w][z][y][n]
-        int input_linear_idx = 
-        w * W_stride 
-        + n * Z_stride 
-        + y * Y_stride  // if dim was Y, n would walk here
-        + x * X_stride;
-
-        // accumulate the sum
-        sum += d_input[input_linear_idx] * BASIS16[Z * k + n];
-    }
-
-    // calculate the linear index for the output element output[w][z][y][k]
-    // this is the same as the global_idx if the grid/block structure matches perfectly.
-    // it just flattens again
-    int output_linear_idx = 
-    w * W_stride 
-    + k * Z_stride 
-    + y * Y_stride 
-    + x * X_stride;
-
+{   
+    int TILE_DIM = 16;
+    int ANGULAR_DIM = 13;
     double normalizer = 1.3919410907075054;
-
-    // the output element is the position of the DCT basis wave coef at thread's WZY
-    d_output[output_linear_idx] = sum * normalizer;
-}
-
-// Struct for debug info
-struct DctDebugInfo {
-    int thread_k;
-    double operands[32]; // adjust size as needed
-    double basis[32];
-    double products[32];
-    int n_count;
-    double sum;
-};
-
-__global__ void dct4d_w_kernel(const double* d_input, double* d_output,
-    int W, int Z, int Y, int X, DctDebugInfo* debug_buffer) 
-{
-    int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
-
+    
     int X_stride = 1;
     int Y_stride = X;
     int Z_stride = Y * X;
     int W_stride = Y * X * Z;
 
-    int x = global_idx % X;
-    int y = (global_idx / X) % Y;
-    int z = (global_idx / (X * Y)) % Z;
-    int k = (global_idx / (X * Y * Z));
+    int macroblock_x = blockIdx.x * 31;
+    int macroblock_y = blockIdx.y * 31;
 
-    // ensure this thread is within the bounds of the output data.
-    if (k >= W || z >= Z || y >= Y || x >= X) {
-        return;
-    }
-    // calculate dct sum
-    // this thread calculates output[w][z][y][k]
-    double sum = 0;
+    int subblock_x = macroblock_x + 15;
+    int subbblock_y = macroblock_y + 15;
 
-    // Only collect debug info for [:][0][0][0] (z==0, y==0, x==0)
-    DctDebugInfo local_debug;
-    bool do_debug = (z == 0 && y == 0 && x == 0 && debug_buffer != nullptr);
-    if (do_debug) {
-        local_debug.thread_k = k;
-        local_debug.n_count = W;
-    }
+    if (subblock_x >= X || subbblock_y >= Y) return;
+               
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
 
-    for (int n = 0; n < W; ++n) {
-        int input_linear_idx = 
-            n * W_stride 
-            + z * Z_stride 
-            + y * Y_stride
-            + x * X_stride;
-        double op = d_input[input_linear_idx];
-        double basis = BASIS16[W * k + n];
-        double prod = op * basis;
-        sum += prod;
-        if (do_debug && n < 32) {
-            local_debug.operands[n] = op;
-            local_debug.basis[n] = basis;
-            local_debug.products[n] = prod;
+    int global_x = subblock_x + tx;
+    int global_y = subbblock_y + ty;
+
+    if (global_x >= X || global_y >= Y) return;
+
+    for (int w = 0; w < W; ++w) {
+        for (int z_out = 0; z_out < ANGULAR_DIM; ++z_out) {
+            double sum = 0.0;
+
+            for (int z_in = 0; z_in < ANGULAR_DIM; ++z_in) {
+                int input_idx = w*W_stride + z_in*Z_stride + global_y*Y_stride + global_x*X_stride;
+
+                int basis_idx = z_out * ANGULAR_DIM + z_in;
+                
+                sum += d_input[input_idx] * BASIS13[basis_idx];
+            }
+
+            int output_idx = w*W_stride + z_out*Z_stride + global_y*Y_stride + global_x*X_stride;
+
+            d_output[output_idx] = sum * normalizer;
         }
     }
-    if (do_debug) {
-        local_debug.sum = sum * 1.3919410907075054;
-        debug_buffer[k] = local_debug; // one slot per k
-    }
+}
 
-    int output_linear_idx = 
-        k * W_stride 
-        + z * Z_stride 
-        + y * Y_stride 
-        + x * X_stride;
-
+__global__ void dct4d_w_kernel(const double* d_input, double* d_output,
+    int W, int Z, int Y, int X) 
+{
+    const int TILE_DIM = 16;
+    const int ANGULAR_DIM = 13;
     double normalizer = 1.3919410907075054;
-    d_output[output_linear_idx] = sum * normalizer;
+
+    int X_stride = 1;
+    int Y_stride = X;
+    int Z_stride = Y * X;
+    int W_stride = Y * X * Z;
+    /*
+        int tx = threadIdx.x % TILE_DIM;
+        int ty = threadIdx.x / TILE_DIM;
+        
+        int x_global = blockIdx.x * TILE_DIM + tx;
+        int y_global = blockIdx.y * TILE_DIM + ty;
+
+        if (y_global >= Y || x_global >= X) {
+            return;
+        }
+    */
+
+    /*
+        Qual é a posição do macrobloco que o threadblock atual processa
+    */
+
+    int macroblock_x = blockIdx.x * 31;
+    int macroblock_y = blockIdx.y * 31;
+
+    /*
+        Qual é a posição do subbloco que o threadblock atual processa
+    */
+
+    int subblock_x = macroblock_x + 15;
+    int subblock_y = macroblock_y + 15;
+
+    /*
+        Qual é a posição da amostra que a thread processa
+    */
+
+    //com threablocks 1d
+    //int tx = subblock_x + (threadIdx.x % 16);
+    //int ty = subblock_y + (threadIdx.x / 16);
+    
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int global_x = subblock_x + tx;
+    int global_y = subblock_y + ty;
+
+    if (global_x >= X || global_y >= Y) return;
+
+    for (int z = 0; z < Z; ++z) {
+        for (int w_out = 0; w_out < ANGULAR_DIM; ++w_out) {
+            double sum = 0.0;
+
+            for (int w_in = 0; w_in < W; ++w_in) {
+                int input_idx = w_in*W_stride + z*Z_stride + global_y*Y_stride + global_x*X_stride;
+                int basis_idx = w_out * ANGULAR_DIM + w_in;
+
+                sum += d_input[input_idx] * BASIS13[basis_idx];
+            }
+            int output_idx = w_out*W_stride + z*Z_stride + global_x*Y_stride + global_y*X_stride;
+
+            d_output[output_idx] = sum * normalizer;
+        }
+    }
 }
 
 void apply_dct1d_gpu(double* data,
@@ -298,41 +360,40 @@ void apply_dct1d_gpu(double* data,
 
     cudaMalloc(&d_output, size_out);
     cudaMalloc(&d_data, size_data);
-
     cudaMemcpy(d_data, data, size_data, cudaMemcpyHostToDevice);
 
-    int total_threads = U * V * S * T;
-    int threads_per_block = 256;
+    const int TILE_DIM = 16;
+    //const int threads_per_block = TILE_DIM * TILE_DIM; // 256
+    //dim3 block_dims(threads_per_block);
 
-    dim3 num_blocks((total_threads + threads_per_block - 1) / threads_per_block);
-    dim3 block_dims(threads_per_block);
+    dim3 block_dims(TILE_DIM, TILE_DIM);
 
+    // int num_blocks_x = T / TILE_DIM;
+    // int num_blocks_y = S / TILE_DIM;
 
-    // Debug buffer for dct4d_w_kernel
-    DctDebugInfo* d_debug = nullptr;
-    DctDebugInfo* h_debug = nullptr;
-    if (selectedDim == 0) {
-        size_t debug_size = U * sizeof(DctDebugInfo); // one per k (U)
-        cudaMalloc(&d_debug, debug_size);
-        h_debug = (DctDebugInfo*)malloc(debug_size);
-        cudaMemset(d_debug, 0, debug_size);
-    }
+    // int num_blocks_x = 1;
+    // int num_blocks_y = 1;
+
+    int num_blocks_x = (T + 15) / 31;
+    int num_blocks_y = (S + 15) / 31;
+
+    dim3 grid_dims(num_blocks_x, num_blocks_y);
 
     switch (selectedDim) {
-        case 3: {
-            dct4d_x_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
-            break;
-        }
-        case 2: {
-            dct4d_y_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
+        case 0: {
+            dct4d_x_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
         case 1: {
-            dct4d_z_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T);
+            dct4d_y_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
-        case 0: {
-            dct4d_w_kernel<<<num_blocks, block_dims>>>(d_data, d_output, U, V, S, T, d_debug);
+        case 2: {
+            dct4d_z_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
+            break;
+        }
+        case 3: {
+            dct4d_w_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
             break;
         }
     }
@@ -348,26 +409,6 @@ void apply_dct1d_gpu(double* data,
     if (err != cudaSuccess) {
         printf("CUDA Error after memcpy: %s\n", cudaGetErrorString(err));
     }
-
-    // Copy and print debug info if needed
-    if (selectedDim == 0 && h_debug && d_debug) {
-        size_t debug_size = U * sizeof(DctDebugInfo);
-        cudaMemcpy(h_debug, d_debug, debug_size, cudaMemcpyDeviceToHost);
-        for (int k = 0; k < U; ++k) {
-            DctDebugInfo& dbg = h_debug[k];
-            printf(">> Thread k=%d\n", dbg.thread_k);
-            for (int n = 0; n < dbg.n_count && n < 32; ++n) {
-                std::cout << "  operand[" << n << "]=" << std::setprecision(6) << dbg.operands[n]
-                          << " * basis=" << std::setprecision(std::numeric_limits<double>::max_digits10) << dbg.basis[n]
-                          << " = " << std::setprecision(std::numeric_limits<double>::max_digits10) << dbg.products[n] << std::endl;
-            }
-
-            std::cout << "  sum = " << std::setprecision(std::numeric_limits<double>::max_digits10) << dbg.sum << std::endl;
-        }
-    }
-
-    if (d_debug) cudaFree(d_debug);
-    if (h_debug) free(h_debug);
 
     cudaFree(d_output);
     cudaFree(d_data);

@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(LightFieldProject LANGUAGES CXX CUDA)
 
 set(CMAKE_CUDA_HOST_COMPILER "/usr/bin/g++-13")
+set(CMAKE_CUDA_ARCHITECTURES 86)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 20)
@@ -25,6 +26,8 @@ set(SOURCE_FILES
     main.cpp
 )
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Add CUDA files
 set(CUDA_SOURCE_FILES
     apply_dct1d.cu
@@ -41,7 +44,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:
-        -G 
+        -G
         -lnvToolsExt
         --fmad=false
     >

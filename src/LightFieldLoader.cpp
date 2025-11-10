@@ -6,7 +6,7 @@
 #include <vector>
 #include <ranges>
 
-#define SYNTH_SAMPLE 43264
+#define SYNTH_SAMPLE 45841250
 
 namespace fs = std::filesystem;
 
@@ -82,11 +82,11 @@ void LightFieldLoader::getFlattenedSyntheticLF(std::string& imageDir) {
     std::string line;
 
     std::getline(infile, line);
-    this->U = 16;
-    this->V = 16;
+    this->U = 13;
+    this->V = 13;
 
-    this->H = 13;
-    this->W = 13;
+    this->H = 434;
+    this->W = 625;
     this->flattenedLf.assign(SYNTH_SAMPLE, 0.0f);
     size_t offset = 0;
     
@@ -101,6 +101,8 @@ void LightFieldLoader::getFlattenedSyntheticLF(std::string& imageDir) {
         flattenedLf[offset++] = value;
 
     }
+
+    std::cout << "Finished loading synthetic LF with size: " << flattenedLf.size() << std::endl;
 
     infile.close();
 }
@@ -171,19 +173,21 @@ std::vector<double> LightFieldLoader::calculateBasisWaves(int dimSize) const {
 }
 
 void LightFieldLoader::calculateDctDim() {
-    std::string synth_folder = "../../Danger_test/initial_Danger_test.csv";
+    std::string synth_folder = "../../Danger_test/global_lightfield_coordinates.csv";
     getFlattenedSyntheticLF(synth_folder);
 
+    std::cout << "Starting DCT calculation on GPU with the dimensions U: " << U << ", V: " << V << ", H: " << H << ", W: " << W << std::endl;
 
     for (int i = 0; i < 4; ++i) {
         apply_dct1d_gpu(flattenedLf.data(), U, V, H, W, i);
+        std::cout << "Finished DCT on dimension " << i << std::endl;
     }
 }
 
 void LightFieldLoader::exportToCsv() {
     std::cout << "About to export to csv!\n";
 
-    std::ofstream outfile("four_passes.csv");
+    std::ofstream outfile("gpu_coefficients_output.csv");
     outfile << std::setprecision(std::numeric_limits<double>::max_digits10);
 
     if (!outfile.is_open()) {
@@ -210,90 +214,6 @@ void LightFieldLoader::exportToCsv() {
     outfile.close();
 }
 
-void LightFieldLoader::calculateError() {
-    std::ifstream file("../../Danger_test/final_dct.csv");
-    if (!file.is_open()) {
-        std::cerr << "Could not open the final_dct.csv file" << std::endl;
-        return;
-    }
-    std::vector<double> cpu_results;
-    std::string line;
-
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string cell;
-        int col = 0;
-        double value = 0.0;
-
-        while (std::getline(ss, cell, ',')) {
-            if (col == 4) {
-                try {
-                    value = std::stod(cell);
-                    cpu_results.push_back(value);
-                } catch (const std::invalid_argument&) {
-                    // skip the row
-                }
-                break;
-            }
-            ++col;
-        }
-    }
-
-    std::ifstream file1("./four_passes.csv");
-    if (!file1.is_open()) {
-        std::cerr << "Could not open the four_passes.csv file" << std::endl;
-        return;
-    }
-    std::vector<double> gpu_results;
-    std::string line1;
-
-    while (std::getline(file1, line1)) {
-        std::stringstream ss(line1);
-        std::string cell;
-        int col = 0;
-        double value = 0.0;
-
-        while (std::getline(ss, cell, ',')) {
-            if (col == 4) {
-                try {
-                    value = std::stod(cell);
-                    gpu_results.push_back(value);
-                } catch (const std::invalid_argument&) {
-                    // skip
-                }
-                break;
-            }
-            ++col;
-        }
-    }
-
-    // Once I have both coefs loaded in gpu_results and cpu_results
-    int size = this->U * this->V * this->H * this->W;
-    std::vector<double> absolute_error;
-    std::vector<double> relative_error;
-    for (int i = 0; i < size; ++i) {
-        absolute_error.push_back(std::abs(gpu_results[i] - cpu_results[i]));
-        relative_error.push_back((std::abs(cpu_results[i] - gpu_results[i]) / std::abs(cpu_results[i])) * 100.0);
-    }
-
-    std::ofstream out0("relative_error");
-    std::ofstream out1("absolute_error");
-
-    out0 << std::setprecision(std::numeric_limits<double>::max_digits10);
-    out1 << std::setprecision(std::numeric_limits<double>::max_digits10);
-
-    for (int i = 0; i < size; ++i) {
-        out0 << relative_error[i] << "\n";
-        out1 << absolute_error[i] << "\n";
-    }
-
-    // find the max value from both lists
-    auto [min_it, max_it] = std::ranges::minmax_element(absolute_error);
-    std::cout << "Max absolute error: " << std::setprecision(std::numeric_limits<double>::max_digits10) << *max_it << "\n";
-
-    auto [min_it2, max_it2] = std::ranges::minmax_element(relative_error);
-    std::cout << "Max relative error: " << std::setprecision(std::numeric_limits<double>::max_digits10) << *max_it2 << "\n";
-}
 
 int LightFieldLoader::getHeight() const { return H; }
 int LightFieldLoader::getWidth() const { return W; }

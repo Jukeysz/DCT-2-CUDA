@@ -29,7 +29,6 @@ public:
     std::vector<double> calculateBasisWaves(int dimSize) const;
     void calculateDctDim();
     void exportToCsv();
-    void calculateError();
 
     std::vector<double> flattenedLf;
 

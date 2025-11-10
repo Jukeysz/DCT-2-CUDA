@@ -11,3 +11,9 @@ reduced_data/
 *.obj
 *.csv
 *.ppmdata4d.csv
+.venv/
+Bikes/
+Danger/
+Danger_test/
+Fountain/
+python_scripts/

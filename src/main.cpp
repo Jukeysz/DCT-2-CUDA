@@ -18,9 +18,6 @@ int main() {
     lf.exportToCsv();
     std::cout << "Exported to CSV" << std::endl;
 
-    lf.calculateError();
-    std::cout << "Calculated the error" << std::endl;
-
     /*
     std::ofstream out1("coefs16.csv");
     out1 << "__constant__ float BASIS16[16 * 16] = {\n";
