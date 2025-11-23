@@ -189,7 +189,7 @@ void LightFieldLoader::exportToCsv() {
 
     std::ofstream outfile("gpu_coefficients_output.csv");
     outfile << std::setprecision(std::numeric_limits<double>::max_digits10);
-
+    
     if (!outfile.is_open()) {
         std::cerr << "It was not possible to open the file into ofstream\n";
     }

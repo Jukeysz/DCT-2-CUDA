@@ -122,16 +122,6 @@ __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
     int Z_stride = Y * X;     
     int W_stride = Z * Y * X;
 
-    // int block_offset_x = blockIdx.x * TILE_DIM;
-    // int block_offset_y = blockIdx.y * TILE_DIM;
-    // if (block_offset_y + TILE_DIM > Y || block_offset_x + TILE_DIM > X) {
-    //     return;
-    // }
-    // int tx = threadIdx.x % TILE_DIM;
-    // int ty = threadIdx.x / TILE_DIM;
-    // int global_x = block_offset_x + tx;
-    // int global_y = block_offset_y + ty;
-
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
@@ -168,10 +158,9 @@ __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
 
             int output_idx = w*W_stride + z*Z_stride + global_y*Y_stride + x_out_global*X_stride;
 
-            d_output[output_idx] = sum * normalizer;
+            d_output[output_idx] = sum;
         }
     }
-
 }
 
 __global__ void dct4d_y_kernel(const double* d_input, double* d_output,
@@ -184,16 +173,6 @@ __global__ void dct4d_y_kernel(const double* d_input, double* d_output,
     int Y_stride = X;
     int Z_stride = Y * X;
     int W_stride = Y * X * Z;
-
-    // int block_offset_x = blockIdx.x * TILE_DIM;
-    // int block_offset_y = blockIdx.y * TILE_DIM;
-    // if (block_offset_y + TILE_DIM > Y || block_offset_x + TILE_DIM > X) {
-    //     return;
-    // }
-    // int tx = threadIdx.x % TILE_DIM;
-    // int ty = threadIdx.x / TILE_DIM;
-    // int global_x = block_offset_x + tx;
-    // int global_y = block_offset_y + ty;
 
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
@@ -229,7 +208,7 @@ __global__ void dct4d_y_kernel(const double* d_input, double* d_output,
             int y_out_global = subblock_y + ty;
             int output_idx = w*W_stride + z*Z_stride + y_out_global*Y_stride + global_x*X_stride;
 
-            d_output[output_idx] = sum * normalizer;
+            d_output[output_idx] = sum;
         }
     }
 }
@@ -250,15 +229,15 @@ __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
     int macroblock_y = blockIdx.y * 31;
 
     int subblock_x = macroblock_x + 15;
-    int subbblock_y = macroblock_y + 15;
+    int subblock_y = macroblock_y + 15;
 
-    if (subblock_x >= X || subbblock_y >= Y) return;
+    if (subblock_x >= X || subblock_y >= Y) return;
                
     int tx = threadIdx.x;
     int ty = threadIdx.y;
 
     int global_x = subblock_x + tx;
-    int global_y = subbblock_y + ty;
+    int global_y = subblock_y + ty;
 
     if (global_x >= X || global_y >= Y) return;
 
@@ -291,28 +270,18 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
     int X_stride = 1;
     int Y_stride = X;
     int Z_stride = Y * X;
-    int W_stride = Y * X * Z;
+    int W_stride = Y * X * Z;    
     /*
-        int tx = threadIdx.x % TILE_DIM;
-        int ty = threadIdx.x / TILE_DIM;
-        
-        int x_global = blockIdx.x * TILE_DIM + tx;
-        int y_global = blockIdx.y * TILE_DIM + ty;
-
-        if (y_global >= Y || x_global >= X) {
-            return;
-        }
-    */
-
-    /*
-        Qual é a posição do macrobloco que o threadblock atual processa
+        Qual é a posição do macrobloco que o threadblock atual processa?
+        Utilizamos o espaçamento entre o início de cada macrobloco pra x e pra y
     */
 
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
     /*
-        Qual é a posição do subbloco que o threadblock atual processa
+        Qual é a posição do subbloco que o threadblock atual processa?
+        Aplicar o deslocamento necessário para encontrar a posição inicial do subbloco
     */
 
     int subblock_x = macroblock_x + 15;
@@ -320,19 +289,21 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
 
     /*
         Qual é a posição da amostra que a thread processa
-    */
-
-    //com threablocks 1d
-    //int tx = subblock_x + (threadIdx.x % 16);
-    //int ty = subblock_y + (threadIdx.x / 16);
-    
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-
-    int global_x = subblock_x + tx;
-    int global_y = subblock_y + ty;
+    */    
+    int global_x = subblock_x + threadIdx.x;
+    int global_y = subblock_y + threadIdx.y;
 
     if (global_x >= X || global_y >= Y) return;
+
+    /*
+    ==========================================================================================
+    A idéia é iterar sobre todas as vistas (óbviamente).
+    A onda a ser utilizada na dimensão W dependerá da linha de vistas.
+    Os elementos de d_input a serem pegos serão [:][z][global_y][global_x].
+    O output resultante dependerá de [w_out][z][global_x][global_y], ou seja, a posição global
+    do respectivo thread dependendo da iteração de vista.
+    ==========================================================================================
+    */
 
     for (int z = 0; z < Z; ++z) {
         for (int w_out = 0; w_out < ANGULAR_DIM; ++w_out) {
@@ -344,7 +315,7 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
 
                 sum += d_input[input_idx] * BASIS13[basis_idx];
             }
-            int output_idx = w_out*W_stride + z*Z_stride + global_x*Y_stride + global_y*X_stride;
+            int output_idx = w_out*W_stride + z*Z_stride + global_y*Y_stride + global_x*X_stride;
 
             d_output[output_idx] = sum * normalizer;
         }
@@ -363,19 +334,11 @@ void apply_dct1d_gpu(double* data,
     cudaMemcpy(d_data, data, size_data, cudaMemcpyHostToDevice);
 
     const int TILE_DIM = 16;
-    //const int threads_per_block = TILE_DIM * TILE_DIM; // 256
-    //dim3 block_dims(threads_per_block);
-
+    const int MACROBLOCK = 31; 
     dim3 block_dims(TILE_DIM, TILE_DIM);
 
-    // int num_blocks_x = T / TILE_DIM;
-    // int num_blocks_y = S / TILE_DIM;
-
-    // int num_blocks_x = 1;
-    // int num_blocks_y = 1;
-
-    int num_blocks_x = (T + 15) / 31;
-    int num_blocks_y = (S + 15) / 31;
+    int num_blocks_x = (T + MACROBLOCK - 1) / MACROBLOCK;
+    int num_blocks_y = (S + MACROBLOCK - 1) / MACROBLOCK;
 
     dim3 grid_dims(num_blocks_x, num_blocks_y);
 

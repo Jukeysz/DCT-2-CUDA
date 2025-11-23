@@ -17,3 +17,4 @@ Danger/
 Danger_test/
 Fountain/
 python_scripts/
+*.nsys-rep
