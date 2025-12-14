@@ -5,25 +5,15 @@
 #include <stdio.h>
 #include <iostream>
 
-/* 
-Each thread computes exactly one output value.
-The DCT coefficient at index [w][z][y][k]
-in which k is the X-dimension coef index (DCT output position)
-and w,z,y specify the location of the 1D slice (sub-vector) I'm transforming
-*/
+#define LF_SIZE 45841250
 
-// BUFFER ORDER: WZYX
-//__constant__ double BASIS13[13 * 13] = {
-//1,1,1,1,1,1,1,1,1,1,1,1,1,1.4039,1.32231,1.16387,0.937797,0.657218,0.338443,-2.27423e-16,-0.338443,-0.657218,-0.937797,-1.16387,-1.32231,-1.4039,1.37312,1.05855,0.501487,-0.170465,-0.803365,-1.25222,-1.41421,-1.25222,-0.803365,-0.170465,0.501487,1.05855,1.37312,1.32231,0.657218,-0.338443,-1.16387,-1.4039,-0.937797,-2.59787e-16,0.937797,1.4039,1.16387,0.338443,-0.657218,-1.32231,1.25222,0.170465,-1.05855,-1.37312,-0.501487,0.803365,1.41421,0.803365,
-//-0.501487,-1.37312,-1.05855,0.170465,1.25222,1.16387,-0.338443,-1.4039,-0.657218,0.937797,1.32231,4.32978e-16,-1.32231,-0.937797,0.657218,1.4039,0.338443,-1.16387,1.05855,-0.803365,-1.25222,0.501487,1.37312,-0.170465,-1.41421,-0.170465,1.37312,0.501487,-1.25222,-0.803365,1.05855,0.937797,-1.16387,-0.657218,1.32231,0.338443,-1.4039,-6.06169e-16,1.4039,-0.338443,-1.32231,0.657218,1.16387,-0.937797,0.803365,-1.37312,0.170465,1.25222,-1.05855,-0.501487,1.41421,-0.501487,-1.05855,1.25222,0.170465,-1.37312,0.803365,0.657218,-1.4039,0.937797,
-//0.338443,-1.32231,1.16387,7.7936e-16,-1.16387,1.32231,-0.338443,-0.937797,1.4039,-0.657218,0.501487,-1.25222,1.37312,-0.803365,-0.170465,1.05855,-1.41421,1.05855,-0.170465,-0.803365,1.37312,-1.25222,0.501487,0.338443,-0.937797,1.32231,-1.4039,1.16387,-0.657218,1.5596e-15,0.657218,-1.16387,1.4039,-1.32231,0.937797,-0.338443,0.170465,-0.501487,0.803365,-1.05855,1.25222,-1.37312,1.41421,-1.37312,1.25222,-1.05855,0.803365,-0.501487,0.170465,};
-
-//__constant__ double BASIS16[16 * 16] = {
-//1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1.4074,1.35332,1.24723,1.0932,0.897168,0.666656,0.410525,0.138617,-0.138617,-0.410525,-0.666656,-0.897168,-1.0932,-1.24723,-1.35332,-1.4074,1.38704,1.17588,0.785695,0.275899,-0.275899,-0.785695,-1.17588,-1.38704,-1.38704,-1.17588,-0.785695,-0.275899,0.275899,0.785695,1.17588,1.38704,1.35332,0.897168,0.138617,-0.666656,-1.24723,-1.4074,-1.0932,-0.410525,0.410525,1.0932,1.4074,1.24723,
-//0.666656,-0.138617,-0.897168,-1.35332,1.30656,0.541196,-0.541196,-1.30656,-1.30656,-0.541196,0.541196,1.30656,1.30656,0.541196,-0.541196,-1.30656,-1.30656,-0.541196,0.541196,1.30656,1.24723,0.138617,-1.0932,-1.35332,-0.410525,0.897168,1.4074,0.666656,-0.666656,-1.4074,-0.897168,0.410525,1.35332,1.0932,-0.138617,-1.24723,1.17588,-0.275899,-1.38704,-0.785695,0.785695,1.38704,0.275899,-1.17588,-1.17588,0.275899,1.38704,0.785695,-0.785695,-1.38704,-0.275899,1.17588,1.0932,-0.666656,-1.35332,0.138617,1.4074,0.410525,-1.24723,-0.897168,
-//0.897168,1.24723,-0.410525,-1.4074,-0.138617,1.35332,0.666656,-1.0932,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,0.897168,-1.24723,-0.410525,1.4074,-0.138617,-1.35332,0.666656,1.0932,-1.0932,-0.666656,1.35332,0.138617,-1.4074,0.410525,1.24723,-0.897168,0.785695,-1.38704,0.275899,1.17588,-1.17588,-0.275899,1.38704,-0.785695,-0.785695,1.38704,-0.275899,-1.17588,1.17588,0.275899,-1.38704,0.785695,0.666656,-1.4074,0.897168,0.410525,
-//-1.35332,1.0932,0.138617,-1.24723,1.24723,-0.138617,-1.0932,1.35332,-0.410525,-0.897168,1.4074,-0.666656,0.541196,-1.30656,1.30656,-0.541196,-0.541196,1.30656,-1.30656,0.541196,0.541196,-1.30656,1.30656,-0.541196,-0.541196,1.30656,-1.30656,0.541196,0.410525,-1.0932,1.4074,-1.24723,0.666656,0.138617,-0.897168,1.35332,-1.35332,0.897168,-0.138617,-0.666656,1.24723,-1.4074,1.0932,-0.410525,0.275899,-0.785695,1.17588,-1.38704,1.38704,-1.17588,0.785695,-0.275899,-0.275899,0.785695,-1.17588,1.38704,-1.38704,1.17588,-0.785695,0.275899,
-//0.138617,-0.410525,0.666656,-0.897168,1.0932,-1.24723,1.35332,-1.4074,1.4074,-1.35332,1.24723,-1.0932,0.897168,-0.666656,0.410525,-0.138617,};
+void checkCUDAError(cudaError_t code, const char *file, int line) {
+    if (code != cudaSuccess) {
+        fprintf(stderr, "CUDA Error: %s at %s:%d\n", cudaGetErrorString(code), file, line);
+        exit(code);
+    }
+}
+#define gpuErrchk(ans) { checkCUDAError((ans), __FILE__, __LINE__); }
 
 __constant__ double BASIS13[13 * 13] = {
 1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,1.00000000000000000,
@@ -60,56 +50,7 @@ __constant__ double BASIS16[16 * 16] = {
 0.13861716919909170,-0.41052452752235752,0.66665565847774699,-0.89716758634263616,1.09320186700175848,-1.24722501298667288,1.35331800117435352,-1.40740373752638281,1.40740373752638237,-1.35331800117435264,1.24722501298667177,-1.09320186700175848,0.89716758634263416,-0.66665565847774033,0.41052452752235619,-0.13861716919908601,
 };
 
-#define LF_SIZE 45841250
-
 // Paralelizar sobre as espaciais e iterar sobre as angulares
-
-// __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
-//                              int W, int Z, int Y, int X)
-// {
-//     // calculates one output value
-//     int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
-// 
-//     int X_stride = 1;         // stride between elements along X
-//     int Y_stride = X;         // stride between elements along Y
-//     int Z_stride = Y * X;     // stride between elements along Z
-//     int W_stride = Z * Y * X; // stride between elements along W
-// 
-//     int k = global_idx % X;
-//     int y = (global_idx / X) % Y;
-//     int z = (global_idx / (X * Y)) % Z;
-//     int w = global_idx / (X * Y * Z);
-// 
-//     
-//     // ensure this thread is within the bounds of the output data.
-//     if (w >= W || z >= Z || y >= Y || k >= X) {
-//         return;
-//     }
-// 
-//     // this thread calculates output[w][z][y][k]
-//     double sum = 0;
-// 
-//     for (int n = 0; n < X; ++n) {
-//         // calculate the linear index for the input element input[w][z][y][n]
-//         int input_linear_idx = 
-//               w * W_stride 
-//             + z * Z_stride 
-//             + y * Y_stride  // if dim was Y, n would walk here
-//             + n * X_stride; // n walks here
-// 
-//         // accumulate the sum
-//         sum += d_input[input_linear_idx] * BASIS13[X * k + n];
-//     }
-// 
-//     // calculate the linear index for the output element output[w][z][y][k]
-//     int output_linear_idx = 
-//           w * W_stride 
-//         + z * Z_stride 
-//         + y * Y_stride 
-//         + k * X_stride;
-// 
-//     d_output[output_linear_idx] = sum;
-// }
 
 __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
                              int W, int Z, int Y, int X)
@@ -137,6 +78,9 @@ __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
     int global_y = subblock_y + ty;
 
     if (global_x >= X || global_y >= Y) return;
+
+    // Collaboratively have each thread load one coefficient for the threadblock
+    // into smem.
 
     for (int z = 0; z < Z; ++z) {
         for (int w = 0; w < W; ++w) {
@@ -323,56 +267,61 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
 }
 
 void apply_dct1d_gpu(double* data,
-                     int U, int V, int S, int T, int selectedDim) {
+                     int U, int V, int S, int T) {
     double *d_output, *d_data;
 
     size_t size_out = (size_t)U*V*S*T * sizeof(double);
     size_t size_data = (size_t)U*V*S*T * sizeof(double);
 
-    cudaMalloc(&d_output, size_out);
-    cudaMalloc(&d_data, size_data);
-    cudaMemcpy(d_data, data, size_data, cudaMemcpyHostToDevice);
+    gpuErrchk(cudaMalloc(&d_output, size_out));
+    gpuErrchk(cudaMalloc(&d_data, size_data));
+    // gpuErrchk(cudaMemcpy(d_data, data, size_data, cudaMemcpyHostToDevice));
+    
 
     const int TILE_DIM = 16;
     const int MACROBLOCK = 31; 
     dim3 block_dims(TILE_DIM, TILE_DIM);
-
     int num_blocks_x = (T + MACROBLOCK - 1) / MACROBLOCK;
     int num_blocks_y = (S + MACROBLOCK - 1) / MACROBLOCK;
-
     dim3 grid_dims(num_blocks_x, num_blocks_y);
 
-    switch (selectedDim) {
-        case 0: {
-            dct4d_x_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
-            break;
-        }
-        case 1: {
-            dct4d_y_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
-            break;
-        }
-        case 2: {
-            dct4d_z_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
-            break;
-        }
-        case 3: {
-            dct4d_w_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
-            break;
-        }
-    }
+    // Warmup run
+    // dct4d_x_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
+    // dct4d_y_kernel<<<grid_dims, block_dims>>>(d_output, d_data, U, V, S, T);
+    // dct4d_z_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
+    // dct4d_w_kernel<<<grid_dims, block_dims>>>(d_output, d_data, U, V, S, T);
+    // // Ensure the warmup completion
+    // gpuErrchk(cudaDeviceSynchronize());
 
+    // Timed run
+    cudaEvent_t start_event, stop_event;
+    gpuErrchk(cudaEventCreate(&start_event));
+    gpuErrchk(cudaEventCreate(&stop_event));
 
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("CUDA Error after kernel launch: %s\n", cudaGetErrorString(err));
-    }
+    gpuErrchk(cudaEventRecord(start_event));
+    
+    gpuErrchk(cudaMemcpy(d_data, data, size_data, cudaMemcpyHostToDevice));
+    dct4d_x_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
+    gpuErrchk(cudaGetLastError());
+    dct4d_y_kernel<<<grid_dims, block_dims>>>(d_output, d_data, U, V, S, T);
+    gpuErrchk(cudaGetLastError());
+    dct4d_z_kernel<<<grid_dims, block_dims>>>(d_data, d_output, U, V, S, T);
+    gpuErrchk(cudaGetLastError());
+    dct4d_w_kernel<<<grid_dims, block_dims>>>(d_output, d_data, U, V, S, T);
+    gpuErrchk(cudaGetLastError());
 
-    cudaMemcpy(data, d_output, size_out, cudaMemcpyDeviceToHost);
-    err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("CUDA Error after memcpy: %s\n", cudaGetErrorString(err));
-    }
+    gpuErrchk(cudaMemcpy(data, d_data, size_out, cudaMemcpyDeviceToHost)); 
 
+    gpuErrchk(cudaEventRecord(stop_event));
+    gpuErrchk(cudaEventSynchronize(stop_event));
+
+    float milliseconds = 0;
+    gpuErrchk(cudaEventElapsedTime(&milliseconds, start_event, stop_event));
+
+    std::cout << "Kernel execution time with memory transfer: " << milliseconds << "\n";
+
+    gpuErrchk(cudaEventDestroy(start_event));
+    gpuErrchk(cudaEventDestroy(stop_event));
     cudaFree(d_output);
     cudaFree(d_data);
 }

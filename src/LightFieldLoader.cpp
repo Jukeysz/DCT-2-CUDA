@@ -176,12 +176,13 @@ void LightFieldLoader::calculateDctDim() {
     std::string synth_folder = "../../Danger_test/global_lightfield_coordinates.csv";
     getFlattenedSyntheticLF(synth_folder);
 
+    for (auto& sample : flattenedLf) {
+        sample -= 512;
+    }
+
     std::cout << "Starting DCT calculation on GPU with the dimensions U: " << U << ", V: " << V << ", H: " << H << ", W: " << W << std::endl;
 
-    for (int i = 0; i < 4; ++i) {
-        apply_dct1d_gpu(flattenedLf.data(), U, V, H, W, i);
-        std::cout << "Finished DCT on dimension " << i << std::endl;
-    }
+    apply_dct1d_gpu(flattenedLf.data(), U, V, H, W);
 }
 
 void LightFieldLoader::exportToCsv() {
