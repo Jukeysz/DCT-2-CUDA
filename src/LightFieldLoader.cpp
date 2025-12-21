@@ -173,7 +173,7 @@ std::vector<double> LightFieldLoader::calculateBasisWaves(int dimSize) const {
 }
 
 void LightFieldLoader::calculateDctDim() {
-    std::string synth_folder = "../../Danger_test/global_lightfield_coordinates.csv";
+    std::string synth_folder = "../../Fountain/global_lightfield_coordinates.csv";
     getFlattenedSyntheticLF(synth_folder);
 
     for (auto& sample : flattenedLf) {
