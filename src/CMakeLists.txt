@@ -30,7 +30,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add CUDA files
 set(CUDA_SOURCE_FILES
-    apply_dct1d.cu
+    apply_dct1d_7x7x8x8.cu
 )
 
 # Create executable
