@@ -56,42 +56,47 @@ __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
-    int subblock_x = macroblock_x + 7;
-    int subblock_y = macroblock_y + 7;
+    int positions[3] = {7, 15, 23};
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            int subblock_x = macroblock_x + positions[i];
+            int subblock_y = macroblock_y + positions[j];
 
-    if (subblock_x >= X || subblock_y >= Y) return;
+            if (subblock_x >= X || subblock_y >= Y) return;
 
-    int global_x = subblock_x + threadIdx.x;
-    int global_y = subblock_y + threadIdx.y;
+            int global_x = subblock_x + threadIdx.x;
+            int global_y = subblock_y + threadIdx.y;
 
-    if (global_x >= X || global_y >= Y) return;
+            if (global_x >= X || global_y >= Y) return;
 
-    int ANGULAR_OFFSET_Z = 6;
-    int ANGULAR_OFFSET_W = 6;
+            int ANGULAR_OFFSET_Z = 6;
+            int ANGULAR_OFFSET_W = 6;
 
-    for (int z = 0; z < ANGULAR_DIM; ++z) {
-        int global_z = ANGULAR_OFFSET_Z + z;
-        for (int w = 0; w < ANGULAR_DIM; ++w) {
-            int global_w = ANGULAR_OFFSET_W + w;
+            for (int z = 0; z < ANGULAR_DIM; ++z) {
+                int global_z = ANGULAR_OFFSET_Z + z;
+                for (int w = 0; w < ANGULAR_DIM; ++w) {
+                    int global_w = ANGULAR_OFFSET_W + w;
 
-            double sum = 0.0;
-            for (int x_in_local = 0; x_in_local < SPATIAL_DIM; ++x_in_local) {
-                // int x_in_global = block_offset_x + x_in_local;
-                int x_in_global = subblock_x + x_in_local;
+                    double sum = 0.0;
+                    for (int x_in_local = 0; x_in_local < SPATIAL_DIM; ++x_in_local) {
+                        // int x_in_global = block_offset_x + x_in_local;
+                        int x_in_global = subblock_x + x_in_local;
 
-                int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + x_in_global*X_stride;
+                        int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + x_in_global*X_stride;
 
-                int basis_idx = threadIdx.x * SPATIAL_DIM + x_in_local;
+                        int basis_idx = threadIdx.x * SPATIAL_DIM + x_in_local;
 
-                sum += d_input[input_idx] * BASIS8[basis_idx];
+                        sum += d_input[input_idx] * BASIS8[basis_idx];
+                    }
+
+                    // int x_out_global = block_offset_x + tx;
+                    int x_out_global = subblock_x + threadIdx.x;
+
+                    int output_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + x_out_global*X_stride;
+
+                    d_output[output_idx] = sum * normalizer;
+                }
             }
-
-            // int x_out_global = block_offset_x + tx;
-            int x_out_global = subblock_x + threadIdx.x;
-
-            int output_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + x_out_global*X_stride;
-
-            d_output[output_idx] = sum * normalizer;
         }
     }
 }
@@ -111,40 +116,45 @@ __global__ void dct4d_y_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
-    int subblock_x = macroblock_x + 7;
-    int subblock_y = macroblock_y + 7;
+    int positions[3] = {7, 15, 23};
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            int subblock_x = macroblock_x + positions[i];
+            int subblock_y = macroblock_y + positions[j];
 
-    if (subblock_x >= X || subblock_y >= Y) return;
+            if (subblock_x >= X || subblock_y >= Y) return;
 
-    int global_x = subblock_x + threadIdx.x;
-    int global_y = subblock_y + threadIdx.y;
+            int global_x = subblock_x + threadIdx.x;
+            int global_y = subblock_y + threadIdx.y;
 
-    if (global_x >= X || global_y >= Y) return;
+            if (global_x >= X || global_y >= Y) return;
 
-    int ANGULAR_OFFSET_Z = 6;
-    int ANGULAR_OFFSET_W = 6;
+            int ANGULAR_OFFSET_Z = 6;
+            int ANGULAR_OFFSET_W = 6;
 
-    for (int z = 0; z < ANGULAR_DIM; ++z) {
-        int global_z = ANGULAR_OFFSET_Z + z;
-        for (int w = 0; w < ANGULAR_DIM; ++w) {
-            int global_w = ANGULAR_OFFSET_W + w;
+            for (int z = 0; z < ANGULAR_DIM; ++z) {
+                int global_z = ANGULAR_OFFSET_Z + z;
+                for (int w = 0; w < ANGULAR_DIM; ++w) {
+                    int global_w = ANGULAR_OFFSET_W + w;
 
-            double sum = 0.0;
-            for (int y_in_local = 0; y_in_local < SPATIAL_DIM; ++y_in_local) {
-                // int y_in_global = block_offset_y + y_in_local;
-                int y_in_global = subblock_y + y_in_local;
+                    double sum = 0.0;
+                    for (int y_in_local = 0; y_in_local < SPATIAL_DIM; ++y_in_local) {
+                        // int y_in_global = block_offset_y + y_in_local;
+                        int y_in_global = subblock_y + y_in_local;
 
-                int input_idx = global_w*W_stride + global_z*Z_stride + y_in_global*Y_stride + global_x*X_stride;
-                int basis_idx = threadIdx.y * SPATIAL_DIM + y_in_local;
+                        int input_idx = global_w*W_stride + global_z*Z_stride + y_in_global*Y_stride + global_x*X_stride;
+                        int basis_idx = threadIdx.y * SPATIAL_DIM + y_in_local;
 
-                sum += d_input[input_idx] * BASIS8[basis_idx];
+                        sum += d_input[input_idx] * BASIS8[basis_idx];
+                    }
+
+                    // int y_out_global = block_offset_y + ty;
+                    int y_out_global = subblock_y + threadIdx.y;
+                    int output_idx = global_w*W_stride + global_z*Z_stride + y_out_global*Y_stride + global_x*X_stride;
+
+                    d_output[output_idx] = sum * normalizer;
+                }
             }
-
-            // int y_out_global = block_offset_y + ty;
-            int y_out_global = subblock_y + threadIdx.y;
-            int output_idx = global_w*W_stride + global_z*Z_stride + y_out_global*Y_stride + global_x*X_stride;
-
-            d_output[output_idx] = sum * normalizer;
         }
     }
 }
@@ -164,37 +174,42 @@ __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
-    int subblock_x = macroblock_x + 7;
-    int subblock_y = macroblock_y + 7;
+    int positions[3] = {7, 15, 23};
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            int subblock_x = macroblock_x + positions[i];
+            int subblock_y = macroblock_y + positions[j];
 
-    if (subblock_x >= X || subblock_y >= Y) return;
+            if (subblock_x >= X || subblock_y >= Y) return;
 
-    int global_x = subblock_x + threadIdx.x;
-    int global_y = subblock_y + threadIdx.y;
+            int global_x = subblock_x + threadIdx.x;
+            int global_y = subblock_y + threadIdx.y;
 
-    if (global_x >= X || global_y >= Y) return;
+            if (global_x >= X || global_y >= Y) return;
 
-    int ANGULAR_OFFSET_Z = 6;
-    int ANGULAR_OFFSET_W = 6;
+            int ANGULAR_OFFSET_Z = 6;
+            int ANGULAR_OFFSET_W = 6;
 
-    for (int w = 0; w < ANGULAR_DIM; ++w) {
-        int global_w = ANGULAR_OFFSET_W + w;
-        for (int z_out = 0; z_out < ANGULAR_DIM; ++z_out) {
-            int global_z_out = ANGULAR_OFFSET_Z + z_out;
-            double sum = 0.0;
+            for (int w = 0; w < ANGULAR_DIM; ++w) {
+                int global_w = ANGULAR_OFFSET_W + w;
+                for (int z_out = 0; z_out < ANGULAR_DIM; ++z_out) {
+                    int global_z_out = ANGULAR_OFFSET_Z + z_out;
+                    double sum = 0.0;
 
-            for (int z_in = 0; z_in < ANGULAR_DIM; ++z_in) {
-                int global_z_in = ANGULAR_OFFSET_Z + z_in;
-                int input_idx = global_w*W_stride + global_z_in*Z_stride + global_y*Y_stride + global_x*X_stride;
+                    for (int z_in = 0; z_in < ANGULAR_DIM; ++z_in) {
+                        int global_z_in = ANGULAR_OFFSET_Z + z_in;
+                        int input_idx = global_w*W_stride + global_z_in*Z_stride + global_y*Y_stride + global_x*X_stride;
 
-                int basis_idx = z_out * ANGULAR_DIM + z_in;
-                
-                sum += d_input[input_idx] * BASIS7[basis_idx];
+                        int basis_idx = z_out * ANGULAR_DIM + z_in;
+                        
+                        sum += d_input[input_idx] * BASIS7[basis_idx];
+                    }
+
+                    int output_idx = global_w*W_stride + global_z_out*Z_stride + global_y*Y_stride + global_x*X_stride;
+
+                    d_output[output_idx] = sum * normalizer;
+                }
             }
-
-            int output_idx = global_w*W_stride + global_z_out*Z_stride + global_y*Y_stride + global_x*X_stride;
-
-            d_output[output_idx] = sum * normalizer;
         }
     }
 }
@@ -204,12 +219,14 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
 {
     const int SPATIAL_DIM = 8;
     const int ANGULAR_DIM = 7;
-    double normalizer = 1.3627702877384937;
+    const int ANGULAR_OFFSET_Z = 6;
+    const int ANGULAR_OFFSET_W = 6;
+    const double normalizer = 1.3627702877384937;
 
-    int X_stride = 1;
-    int Y_stride = X;
-    int Z_stride = Y * X;
-    int W_stride = Y * X * Z;    
+    const int X_stride = 1;
+    const int Y_stride = X;
+    const int Z_stride = Y * X;
+    const int W_stride = Y * X * Z;    
     /*
         Qual é a posição do macrobloco que o threadblock atual processa?
         Utilizamos o espaçamento entre o início de cada macrobloco pra x e pra y
@@ -218,51 +235,55 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
-    /*
-        Qual é a posição do subbloco que o threadblock atual processa?
-        Aplicar o deslocamento necessário para encontrar a posição inicial do subbloco
-    */
+    int positions[3] = {7, 15, 23};
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            /*
+            Qual é a posição do subbloco que o threadblock atual processa?
+            Aplicar o deslocamento necessário para encontrar a posição inicial do subbloco
+            */
 
-    int subblock_x = macroblock_x + 7;
-    int subblock_y = macroblock_y + 7;
+            int subblock_x = macroblock_x + positions[i];
+            int subblock_y = macroblock_y + positions[j];
 
-    /*
-        Qual é a posição da amostra que a thread processa
-    */    
-    int global_x = subblock_x + threadIdx.x;
-    int global_y = subblock_y + threadIdx.y;
+            /*
+                Qual é a posição da amostra que a thread processa
+            */    
+            int global_x = subblock_x + threadIdx.x;
+            int global_y = subblock_y + threadIdx.y;
 
-    if (global_x >= X || global_y >= Y) return;
+            if (global_x >= X || global_y >= Y) return;
 
-    /*
-    ==========================================================================================
-    A idéia é iterar sobre todas as vistas (óbviamente).
-    A onda a ser utilizada na dimensão W dependerá da linha de vistas.
-    Os elementos de d_input a serem pegos serão [:][z][global_y][global_x].
-    O output resultante dependerá de [w_out][z][global_x][global_y], ou seja, a posição global
-    do respectivo thread dependendo da iteração de vista.
-    ==========================================================================================
-    */
+            /* CARREGAR COLABORATIVEMENTE NA SMEM AQUI! */
 
-    int ANGULAR_OFFSET_Z = 6;
-    int ANGULAR_OFFSET_W = 6;
+            /*
+            ==========================================================================================
+            A idéia é iterar sobre todas as vistas (óbviamente).
+            A onda a ser utilizada na dimensão W dependerá da linha de vistas.
+            Os elementos de d_input a serem pegos serão [:][z][global_y][global_x].
+            O output resultante dependerá de [w_out][z][global_x][global_y], ou seja, a posição global
+            do respectivo thread dependendo da iteração de vista.
+            ==========================================================================================
+            */
 
-    for (int z = 0; z < ANGULAR_DIM; ++z) {
-        int global_z = ANGULAR_OFFSET_Z + z;
-        for (int w_out = 0; w_out < ANGULAR_DIM; ++w_out) {
-            int global_w_out = ANGULAR_OFFSET_W + w_out;
+            for (int z = 0; z < ANGULAR_DIM; ++z) {
+                int global_z = ANGULAR_OFFSET_Z + z;
+                for (int w_out = 0; w_out < ANGULAR_DIM; ++w_out) {
+                    int global_w_out = ANGULAR_OFFSET_W + w_out;
 
-            double sum = 0.0;
-            for (int w_in = 0; w_in < ANGULAR_DIM; ++w_in) {
-                int global_w_in = ANGULAR_OFFSET_W + w_in;
-                int input_idx = global_w_in*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
-                int basis_idx = w_out * ANGULAR_DIM + w_in;
+                    double sum = 0.0;
+                    for (int w_in = 0; w_in < ANGULAR_DIM; ++w_in) {
+                        int global_w_in = ANGULAR_OFFSET_W + w_in;
+                        int input_idx = global_w_in*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+                        int basis_idx = w_out * ANGULAR_DIM + w_in;
 
-                sum += d_input[input_idx] * BASIS7[basis_idx];
+                        sum += d_input[input_idx] * BASIS7[basis_idx];
+                    }
+                    int output_idx = global_w_out*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+
+                    d_output[output_idx] = sum * normalizer;
+                }
             }
-            int output_idx = global_w_out*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
-
-            d_output[output_idx] = sum * normalizer;
         }
     }
 }
@@ -316,7 +337,7 @@ void apply_dct1d_7x7x8x8_gpu(double* data,
     gpuErrchk(cudaEventRecord(stop_event));
     gpuErrchk(cudaEventSynchronize(stop_event));
 
-    float milliseconds = 0;
+    float milliseconds = 0.0f;
     gpuErrchk(cudaEventElapsedTime(&milliseconds, start_event, stop_event));
 
     std::cout << "Kernel execution time with memory transfer: " << milliseconds << "\n";
