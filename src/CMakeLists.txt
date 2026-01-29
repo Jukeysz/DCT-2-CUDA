@@ -30,7 +30,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add CUDA files
 set(CUDA_SOURCE_FILES
-    apply_dct1d_7x7x8x8.cu
+    apply_dct1d_7x7x8x8_SMEM.cu
 )
 
 # Create executable
@@ -44,9 +44,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:
-        -G
+        -O3
         -lnvToolsExt
-        --fmad=false
     >
 )
 

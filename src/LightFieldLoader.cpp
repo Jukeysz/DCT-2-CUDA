@@ -1,7 +1,7 @@
 #include "LightFieldLoader.hpp"
 #include <iostream>
 #include <algorithm>
-#include "apply_dct1d_7x7x8x8.hpp"
+#include "apply_dct1d_7x7x8x8_SMEM.hpp"
 #include <fstream>
 #include <vector>
 #include <ranges>
@@ -182,7 +182,7 @@ void LightFieldLoader::calculateDctDim() {
 
     std::cout << "Starting DCT calculation on GPU with the dimensions U: " << U << ", V: " << V << ", H: " << H << ", W: " << W << std::endl;
 
-    apply_dct1d_7x7x8x8_gpu(flattenedLf.data(), U, V, H, W);
+    apply_dct1d_7x7x8x8_SMEM_gpu(flattenedLf.data(), U, V, H, W);
 }
 
 void LightFieldLoader::exportToCsv() {
