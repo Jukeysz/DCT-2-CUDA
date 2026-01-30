@@ -78,7 +78,7 @@ __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
 
     */
 
-    __shared__ double d_input_smem[8][9];
+    __shared__ double d_input_smem[8][8][8][8];
 
     int positions[3] = {7, 15, 23};
     for (int i = 0; i < 3; ++i) {
@@ -93,22 +93,36 @@ __global__ void dct4d_x_kernel(const double* d_input, double* d_output,
 
             bool in_bounds = (global_x < X && global_y < Y);
 
+            /* 
+            Iterate over global and load all 7x7x8x8 samples into smem
+            rather than loading per-view    
+            */
+
+            
+            for (int a = 0; a < ANGULAR_DIM; ++a) {
+                int global_z = ANGULAR_OFFSET_Z + a;
+                for (int b = 0; b < ANGULAR_DIM; ++b) {
+                    int global_w = ANGULAR_OFFSET_W + b;
+                    
+                    if (in_bounds) {
+                        int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+                        d_input_smem[a][b][threadIdx.y][threadIdx.x] = d_input[input_idx];
+                    }
+                }
+            }
+
+            __syncthreads();
+            
+
             for (int z = 0; z < ANGULAR_DIM; ++z) {
                 int global_z = ANGULAR_OFFSET_Z + z;
                 for (int w = 0; w < ANGULAR_DIM; ++w) {
                     int global_w = ANGULAR_OFFSET_W + w;
 
                     if (in_bounds) {
-                        int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
-                        d_input_smem[threadIdx.y][threadIdx.x] = d_input[input_idx];
-                    }
-
-                    __syncthreads();
-
-                    if (in_bounds) {
                         double sum = 0.0;
                         for (int x_in_local = 0; x_in_local < SPATIAL_DIM; ++x_in_local) {
-                            sum += d_input_smem[threadIdx.y][x_in_local] * BASIS8[threadIdx.x * SPATIAL_DIM + x_in_local];
+                            sum += d_input_smem[z][w][threadIdx.y][x_in_local] * BASIS8[threadIdx.x * SPATIAL_DIM + x_in_local];
                         }
 
                         int output_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
