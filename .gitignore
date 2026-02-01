@@ -18,3 +18,9 @@ Danger_test/
 Fountain/
 python_scripts/
 *.nsys-rep
+Stone/
+Stone_Pillars_Outside/
+synth_data/
+*.csv
+*.o
+src/build/

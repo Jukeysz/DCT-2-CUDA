@@ -204,6 +204,8 @@ __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
+    __shared__ double d_input_smem[8][8][8][8];
+
     int positions[3] = {7, 15, 23};
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
@@ -220,24 +222,49 @@ __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
             int ANGULAR_OFFSET_Z = 6;
             int ANGULAR_OFFSET_W = 6;
 
+            bool in_bounds = (global_x < X && global_y < Y);
+
+            for (int k = 0; k < ANGULAR_DIM; ++k) {
+                int global_w = ANGULAR_OFFSET_W + k;
+                for (int l = 0; l <  ANGULAR_DIM; ++l) {
+                    int global_z = ANGULAR_OFFSET_Z + l;
+                    
+                    if (in_bounds) {
+                        int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+                        d_input_smem[k][l][threadIdx.y][threadIdx.x] = d_input[input_idx];
+                    }
+                }
+            }
+
+            __syncthreads();
+
             for (int w = 0; w < ANGULAR_DIM; ++w) {
                 int global_w = ANGULAR_OFFSET_W + w;
                 for (int z_out = 0; z_out < ANGULAR_DIM; ++z_out) {
-                    int global_z_out = ANGULAR_OFFSET_Z + z_out;
-                    double sum = 0.0;
+                    int global_z = ANGULAR_OFFSET_Z + z_out;
 
-                    for (int z_in = 0; z_in < ANGULAR_DIM; ++z_in) {
-                        int global_z_in = ANGULAR_OFFSET_Z + z_in;
-                        int input_idx = global_w*W_stride + global_z_in*Z_stride + global_y*Y_stride + global_x*X_stride;
+                    if (in_bounds) {
+                        double sum = 0.0;
 
-                        int basis_idx = z_out * ANGULAR_DIM + z_in;
-                        
-                        sum += d_input[input_idx] * BASIS7[basis_idx];
+                        for (int z_in = 0; z_in < ANGULAR_DIM; ++z_in) {
+                            int global_z_in = ANGULAR_OFFSET_Z + z_in;
+
+                            int input_idx = global_w*W_stride + global_z_in*Z_stride + global_y*Y_stride + global_x*X_stride;
+
+                            int basis_idx = z_out * ANGULAR_DIM + z_in;
+                            
+                            sum += d_input_smem[w][z_in][threadIdx.y][threadIdx.x] * BASIS7[basis_idx];
+                        }
+
+                        int output_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+
+                        d_output[output_idx] = sum * normalizer;
                     }
 
-                    int output_idx = global_w*W_stride + global_z_out*Z_stride + global_y*Y_stride + global_x*X_stride;
-
-                    d_output[output_idx] = sum * normalizer;
+                    // Quem garante que as outras threads do mesmo bloco terminaram seus coeficientes entre todas as vistas 
+                    // para que assim possamos começar a carregar as amostras da próxima posição relativa?
+                    // Provavelmente preciso de sincronização
+                    __syncthreads();
                 }
             }
         }
