@@ -204,7 +204,7 @@ __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
-    __shared__ double d_input_smem[8][8][8][8];
+    __shared__ double d_input_smem[8][8][8][9];
 
     int positions[3] = {7, 15, 23};
     for (int i = 0; i < 3; ++i) {
@@ -224,12 +224,12 @@ __global__ void dct4d_z_kernel(const double* d_input, double* d_output,
 
             bool in_bounds = (global_x < X && global_y < Y);
 
-            for (int k = 0; k < ANGULAR_DIM; ++k) {
-                int global_w = ANGULAR_OFFSET_W + k;
-                for (int l = 0; l <  ANGULAR_DIM; ++l) {
-                    int global_z = ANGULAR_OFFSET_Z + l;
-                    
-                    if (in_bounds) {
+            if (in_bounds) {
+                for (int k = 0; k < ANGULAR_DIM; ++k) {
+                    int global_w = ANGULAR_OFFSET_W + k;
+
+                    for (int l = 0; l <  ANGULAR_DIM; ++l) {
+                        int global_z = ANGULAR_OFFSET_Z + l;
                         int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
                         d_input_smem[k][l][threadIdx.y][threadIdx.x] = d_input[input_idx];
                     }
@@ -292,6 +292,8 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
     int macroblock_x = blockIdx.x * 31;
     int macroblock_y = blockIdx.y * 31;
 
+    __shared__ double d_input_smem[8][8][8][9];
+
     int positions[3] = {7, 15, 23};
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
@@ -322,23 +324,40 @@ __global__ void dct4d_w_kernel(const double* d_input, double* d_output,
             do respectivo thread dependendo da iteração de vista.
             ==========================================================================================
             */
+            bool in_bounds = (global_x < X && global_y < Y);
+
+            if (in_bounds) {
+                for (int k = 0; k < ANGULAR_DIM; ++k) {
+                    int global_w = ANGULAR_OFFSET_W + k;
+                    for (int l = 0; l < ANGULAR_DIM; ++l) {
+                        int global_z = ANGULAR_OFFSET_Z + l;
+                        
+                        int input_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+                        d_input_smem[k][l][threadIdx.y][threadIdx.x] = d_input[input_idx];
+                    }
+                }
+            }
+
+            __syncthreads();
 
             for (int z = 0; z < ANGULAR_DIM; ++z) {
                 int global_z = ANGULAR_OFFSET_Z + z;
                 for (int w_out = 0; w_out < ANGULAR_DIM; ++w_out) {
-                    int global_w_out = ANGULAR_OFFSET_W + w_out;
+                    int global_w = ANGULAR_OFFSET_W + w_out;
 
-                    double sum = 0.0;
-                    for (int w_in = 0; w_in < ANGULAR_DIM; ++w_in) {
-                        int global_w_in = ANGULAR_OFFSET_W + w_in;
-                        int input_idx = global_w_in*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
-                        int basis_idx = w_out * ANGULAR_DIM + w_in;
+                    if (in_bounds) {
+                        double sum = 0.0;
+                        for (int w_in = 0; w_in < ANGULAR_DIM; ++w_in) {
+                            int basis_idx = w_out * ANGULAR_DIM + w_in;
 
-                        sum += d_input[input_idx] * BASIS7[basis_idx];
+                            sum += d_input_smem[w_in][z][threadIdx.y][threadIdx.x] * BASIS7[basis_idx];
+                        }
+
+                        int output_idx = global_w*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
+                        d_output[output_idx] = sum * normalizer;
                     }
-                    int output_idx = global_w_out*W_stride + global_z*Z_stride + global_y*Y_stride + global_x*X_stride;
 
-                    d_output[output_idx] = sum * normalizer;
+                    __syncthreads();
                 }
             }
         }
